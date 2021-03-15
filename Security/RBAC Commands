@@ -1,0 +1,19 @@
+openssl genrsa -out "hoda.key" 2048	(create key)
+openssl req -new -key hoda.key  -subj /CN=UN/O=GN -out hoda.csr	(create CSR)
+kubectl -n kube-system exec -it kube-apiserver-mycluster-control-plane  -- sh (login to master to copy content of CA.crt and CA.key)
+openssl x509 -req -in hoda.csr -CAkey ca.key -CA ca.crt -CAcreateserial -out hoda.crt -days 365   (create CRT)
+kubectl get csr
+cp /home/mo/.kube ./hoda.kubeconfig 	(create kubeconfig file and send it to the user)			
+	add user certificate ( cat hoda.crt | base64 -w0 ) 
+	add key ( cat hoda.key | base64 -w0 )
+kubectl --kubeconfig hoda.kubeconfig get pods	(Verify kubeconfig file)
+kubectl create role myhodarole --verb=get,list --resource=pods --namespace myhodanamespace  (create role)
+kubectl -n myhodanamespace get role myhodarole -o yaml (verify role )
+kubectl create rolebinding myhodarolebinding --role=myhodarole --user=hoda --namespace myhodanamespace (create role binding )
+	we can bind this role to group not user so instead of using --user=hoda we can use --group="group_name" 
+	so any user in this group will use this role
+kubectl -n myhodanamespace get rolebinding myhodarolebinding -o yaml (verify role binding)
+
+
+
+
