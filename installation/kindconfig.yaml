@@ -1,0 +1,11 @@
+#prerequesties GO & Docker then run the following command
+#kind create cluster --config kindconfig.yaml --name mycluster
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+   - role: control-plane
+   - role: worker
+   - role: worker
+   - role: worker
+
+#ENTRYPOINT ["/bin/bash"]
