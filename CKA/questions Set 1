@@ -1,1 +1,477 @@
 
+Q1 Label Node with Harddisk=SSD 
+#kubectl label nodes k8s-c disktype=ssd
+#kubectl get nodes --show-labels
+Q1.2 Create a pod that is only scheduled on SSD nodes
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: testpod
+  name: testpod
+spec:
+  containers:
+  - image: nginx
+    name: testpod
+  nodeSelector:
+    disktype: ssd
+```
+----------------------------------------------------------------------------------------------------------------------------------
+Q2 Create 2 pod definitions: the second pod should be scheduled to run anywhere the first pod is running 
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: testpod2
+  name: testpod2
+spec:
+  containers:
+  - image: nginx
+    name: testpod2
+  affinity:
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:      ##label of the running pod
+          - key: run             
+            operator: In
+            values:
+            - testpod
+        topologyKey: topology.kubernetes.io/zone   #if this goes wrong try to label the desidred node with this key "topology.kubernetes.io/zone"
+```
+----------------------------------------------------------------------------------------------------------------------------------
+Q3 Create a deployment running nginx version 1.12.2 that will run in 2 pods
+    Scale this to 4 pods.
+    Scale it back to 2 pods.
+    Upgrade this to 1.13.8
+    Check the status of the upgrade
+    How do you do this in a way that you can see the history of what happened?
+    Undo the upgrade
+    Expose the service on port 80
+    
+ Answers
+  -----
+ #kubectl create deployment hoda --image=nginx:1.12.2 --dry-run -o yaml
+ #kubectl apply -f deployment.yaml
+ #kubectl scale --replicas=4 deployment/hoda
+ #kubectl set image deployment hoda nginx=nginx:1.13.8
+ #kubectl rollout status deployment hoda
+ #kubectl rollout history deployment hoda
+ #kubectl rollout history deployment hoda --record
+ #kubectl rollout undo deployment hoda
+ # kubectl expose deployment hoda --type=NodePort --name=hoda-service --port 80
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: hoda-label
+  name: hoda
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hoda
+  template:
+    metadata:
+      labels:
+        app: hoda
+    spec:
+      containers:
+      - image: nginx:1.12.2
+        name: nginx
+        ports:
+        - containerPort: 80
+```
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: hoda-label
+  name: hoda-service
+  namespace: default
+  resourceVersion: "164511"
+  uid: 70f810d1-b64e-4e00-99df-0fd27f4345b0
+spec:
+  clusterIP: 10.109.254.5
+  clusterIPs:
+  - 10.109.254.5
+  externalTrafficPolicy: Cluster
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - nodePort: 31357
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: hoda
+  sessionAffinity: None
+  type: NodePort
+status:
+  loadBalancer: {}
+  ----------------------------------------------------------------------------------------------------------------------------------
+Q4 Create a pod that uses a scratch disk.
+   Change the pod to mount a path on the host.
+Answers
+-------
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: pod
+  name: pod-using-emptydir
+spec:
+  containers:
+  - image: nginx
+    name: pod-container-1
+    resources: {}
+    volumeMounts:
+            - mountPath: /home/empty
+              name: hoda-volume
+  - image: nginx
+    name: pod-container-2
+    resources: {}
+    volumeMounts:
+            - mountPath: /home/empty2
+              name: hoda-volume
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+  volumes:
+          - name: hoda-volume
+            emptyDir: 
+               medium: Memory   
+```
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: pod
+  name: pod-using-emptydir
+spec:
+  containers:
+  - image: nginx
+    name: pod-container-1
+    resources: {}
+    volumeMounts:
+            - mountPath: /home/empty
+              name: hoda-volume
+  - image: nginx
+    name: pod-container-2
+    resources: {}
+    volumeMounts:
+            - mountPath: /home/empty2
+              name: hoda-volume
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+  volumes:
+          - name: hoda-volume
+            hostPath: 
+               Path: /path
+               type: Directory
+```      
+-----------------------------------------------------------------------------------------------------------------------------
+Q5 Taint a node and run a Jenkins Pod on that specified node only.
+''' 
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: pod
+  name: pod
+spec:
+  containers:
+  - args:
+    - pod1
+    image: jenkins/jenkins:lts
+    name: pod
+    command: ["sleep"]
+    args: ["3600"]
+  nodeSelector:
+          zone: zone-a
+'''
+-----------------------------------------------------------------------------------------------------------------------------
+Q6 Create a pod that has a liveness check
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    test: liveness
+  name: liveness-exec
+spec:
+  containers:
+  - name: liveness
+    image: k8s.gcr.io/busybox
+    args:
+    - /bin/sh
+    - -c
+    - touch /tmp/healthy; sleep 30; rm -f /tmp/healthy; sleep 600
+    livenessProbe:
+      exec:
+        command:
+        - cat
+        - /tmp/healthy
+      initialDelaySeconds: 5
+      periodSeconds: 5
+-----------------------------------------------------------------------------------------------------------------------------
+Q7 Use the utility nslookup to look up the DNS records of the service and pod.
+---------------------------------------------------------------------------------------------------------------------------------
+Q8 Find which Pod is taking max CPU
+kubectl top pod -A --sort-by cpu
+-------------------------
+Q9 List all PersistentVolumes sorted by their name
+k get pv --sort-by name
+-------------------------
+Q10 Create a daemon set
+ '''
+ apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluentd-elasticsearch
+  namespace: kube-system
+  labels:
+    k8s-app: fluentd-logging
+spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      name: fluentd-elasticsearch
+  template:
+    metadata:
+      labels:
+        name: fluentd-elasticsearch
+    spec:
+      tolerations:
+      # these tolerations are to have the daemonset runnable on control plane nodes
+      # remove them if your control plane nodes should not run pods
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: fluentd-elasticsearch
+        image: quay.io/fluentd_elasticsearch/fluentd:v2.5.2
+        resources:
+          limits:
+            memory: 200Mi
+          requests:
+            cpu: 100m
+            memory: 200Mi
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+```
+   Change the update strategy to do a rolling update but delaying 30 seconds between pod updates
+# terminationGracePeriodSeconds: 30
+-----------------------------------------------------------------------------------------------------------------------------
+Create a static pod
+ #go to the desired node in /etc/kubernetes/manifests path and create yaml file you want
+ -----------------------------------------------------------------------------------------------------------------------------
+Create a busybox container without a manifest. Then edit the manifest.
+#kubectl run podname --image=busybox 
+#kubectl get pod podname -o yaml
+ -----------------------------------------------------------------------------------------------------------------------------
+Q: Create a pod that uses secrets
+  1.Create a secret
+  #kubectl create secret generic my-db-user-pass --from-file=username.txt --from-file=password.txt (which username &password files contain the cred)
+  #kubectl get secrets
+  #kubectl describe secret/my-db-user-pass
+  #kubectl get secret my-db-user-pass -o jsonpath='{.data}'(to get u&p but its in base64 format so to decode it we use : echo 'dsdsa' | base64 --decode)
+  2.Pull secrets from environment variables
+ ```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secret-env-pod
+spec:
+  containers:
+  - name: mycontainer
+    image: redis
+    env:
+      - name: SECRET_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: my-db-user-pass
+            key: username.txt
+            optional: false # same as default; "mysecret" must exist
+                            # and include a key named "username"
+      - name: SECRET_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: my-db-user-pass
+            key: password.txt
+            optional: false # same as default; "mysecret" must exist
+                            # and include a key named "password"
+  restartPolicy: Never
+  ```
+  #kubectl exec -it secret-env-pod bash 
+  #echo "$SECRET_USERNAME"
+3. Pull secrets from a volume
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod
+spec:
+  containers:
+  - name: mypod
+    image: redis
+    volumeMounts:
+    - name: foo
+      mountPath: "/etc/foo"
+      readOnly: true
+  volumes:
+  - name: foo
+    secret:
+      secretName: my-db-user-pass 
+      optional: false # default setting; "mysecret" must exist
+ ```
+ #kubectl exec -it podname bash 
+ #then go to /etc/foo you will find the secrets
+  -----------------------------------------------------------------------------------------------------------------------------
+Q: Create a job that runs every 3 minutes and prints out the current time.
+```
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hello
+spec:
+  schedule: "*/3 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: hello
+            image: busybox:1.28
+            imagePullPolicy: IfNotPresent
+            command:
+            - /bin/sh
+            - -c
+            - date "+%T;
+          restartPolicy: OnFailure
+```
+#kubectl get jobs --watch
+-----------------------------------------------------------------------------------------------------------------------------
+Q: Create a job that runs 20 times, 5 containers at a time, and prints “Hello parallel world”
+```
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-testing
+spec:
+  completions: 20
+  parallelism: 5
+  template:
+    spec:
+      containers:
+        - name: job
+          image: busybox
+          args:
+            - /bin/sh
+            - -c
+            - echo "Hello parallel world"
+      restartPolicy: Never
+ ```
+-----------------------------------------------------------------------------------------------------------------------------
+Q: Create a horizontal autoscaling group that starts with 2 pods and scales when CPU usage is over 50%.
+#kubectl apply -f https://k8s.io/examples/application/php-apache.yaml
+#kubectl autoscale deployment php-apache --cpu-percent=50 --min=1 --max=10
+#kubectl get hpa
+to increase load #kubectl run -i --tty load-generator --rm --image=busybox:1.28 --restart=Never -- /bin/sh -c "while sleep 0.01; do wget -q -O- http://php-apache; done"
+#kubectl get hpa php-apache --watch
+-----------------------------------------------------------------------------------------------------------------------------
+Create a custom resource definition - CRD
+  Display it in the API with curl
+-----------------------------------------------------------------------------------------------------------------------------
+Create a networking policy such that only pods with the label access=granted can talk to it.
+  Create a nginx pod and attach this policy to it.
+  Create a busybox pod and attempt to talk to nginx - should be blocked
+  Attach the label to busybox and try again - should be allowed
+ ```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox-sleep
+spec:
+  containers:
+  - name: busybox
+    image: busybox:1.28
+    args:
+    - sleep
+    - "1000000"
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+spec:
+  podSelector: 
+    matchLabels:
+      name: busybox-sleep
+  policyTypes:
+  - Ingress
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  replicas: 1 # tells deployment to run 2 pods matching the template
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14.2
+        ports:
+        - containerPort: 80
+```
+ -----------------------------------------------------------------------------------------------------------------------------
+Create a service that references an externalname - https://api.github.com/users/prabhatsharma
+  Test that this works from another pod
+-----------------------------------------------------------------------------------------------------------------------------
+Create a pod that runs all processes as user 1000.
+-----------------------------------------------------------------------------------------------------------------------------
+Create a namespace
+  Run a pod in the new namespace
+  Put memory limits on the namespace
+  Limit pods to 2 persistent volumes in this namespace
+-----------------------------------------------------------------------------------------------------------------------------
+Write an ingress rule that redirects calls to /foo to one service and to /bar to another
+-----------------------------------------------------------------------------------------------------------------------------
+Write a service that exposes nginx on a nodeport
+  Change it to use a cluster port
+  Scale the service
+  Change it to use an external IP
+  Change it to use a load balancer
+ -----------------------------------------------------------------------------------------------------------------------------
+Deploy nginx with 3 replicas and then expose a port
+-----------------------------------------------------------------------------------------------------------------------------
+Use port forwarding to talk to a specific port
