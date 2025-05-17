@@ -1,0 +1,8 @@
+1. helm repo add gatekeeper https://open-policy-agent.github.io/gatekeeper/charts
+2. helm install gatekeeper/gatekeeper --name-template=gatekeeper --namespace gatekeeper-system --create-namespace
+3. kubectl get pods -n gatekeeper-system
+4. kubectl create -f ./constrainttemplate.yaml
+5. kubectl create -f ./constraint.yaml
+6. kubectl get constraint
+7. kubectl get constrainttemplate
+8. kubectl create -f ./example.yaml
